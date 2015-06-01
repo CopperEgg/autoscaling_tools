@@ -27,7 +27,7 @@ inactive_objects for site:
   --dryrun          -d      outputs the server status for each server. No action is performed by type flag when dry run is active
   --apikey,         -a arg  Site token. If not specified will remove all inactive sites
   --type            -t arg  hide|remove Object, Default=hide
-  --object_type     -o arg  Object Type - Server|Probe|Custom
+  --object_type     -o arg  Object Type - Server|Probe|Custom. (Currently Only server is supported)
   --time_inactive   -s arg  Age in Hour
   EOF
 
