@@ -1,0 +1,204 @@
+#!/usr/bin/env ruby
+
+# inactive_objects
+#
+# Takes a CopperEgg API key. It lists all the servers for that account and
+# deletes ones more than a certain duration old.
+
+require 'getoptlong'
+require 'json'
+require 'net/http'
+
+opts = GetoptLong.new(
+    [ '--help', '-h', GetoptLong::NO_ARGUMENT ],
+    [ '--verbosity', '-v', GetoptLong::NO_ARGUMENT ],
+    [ '--dryrun', '-d', GetoptLong::NO_ARGUMENT ],
+    [ '--apikey', '-a', GetoptLong::REQUIRED_ARGUMENT ],
+    # [ '--object_type', '-o', GetoptLong::REQUIRED_ARGUMENT ],
+    [ '--type',  '-t', GetoptLong::REQUIRED_ARGUMENT ],
+    [ '--time_inactive',  '-s', GetoptLong::REQUIRED_ARGUMENT ]
+)
+
+def usage
+  puts <<-EOF
+inactive_objects for site:
+  --help,           -h      Shows help
+  --verbosity,      -v      Verbosity Level
+  --dryrun          -d      outputs the server status for each server. No action is performed by type flag when dry run is active
+  --apikey,         -a arg  Site token. If not specified will remove all inactive sites
+  --type            -t arg  hide|remove Object, Default=hide
+  --time_inactive   -s arg  Age in Hour
+  EOF
+
+#  --object_type     -o arg  Object Type - Server|Probe|Custom
+end
+
+@options = {:logging => false, :time_inactive => 24, :action => "hide"}
+# Object Types
+@server = 'server'
+@probe = 'probe'
+@custom = 'custom'
+
+# Action Types
+@remove = 'remove'
+@hide = 'hide'
+
+@minimum_time_inactive = 24
+
+opts.each do |opt, arg|
+  case opt
+    when "--help"
+      usage
+      exit
+
+    when "--verbosity"
+      @options[:logging] = true
+
+    when "--dryrun"
+      @options[:dryrun] = true
+
+    when "--apikey"
+      @options[:apikey] = arg
+
+    when "--object_type"
+      if [@server, @probe, @custom].include? arg.downcase
+        @options[:object_type] = arg.downcase
+      else
+        puts "Values can be hide or remove"
+        usage
+        exit
+      end
+
+    when "--type"
+      if [@remove, @hide].include? arg.downcase
+        @options[:action] = arg.downcase
+      else
+        puts "Values can be hide or remove"
+        usage
+        exit
+      end
+
+    when "--time_inactive"
+      @options[:time_inactive] = arg.to_f
+  end
+end
+
+
+# todo Remove this when we update script for probes and custom metrics
+@options[:object_type] = @server
+
+# Checking required parameters
+if not @options[:object_type]
+  puts "Object Type is required for running the script"
+  usage
+  exit
+end
+
+if not @options[:apikey]
+  puts "Api Key is required for running the script"
+  usage
+  exit
+end
+
+if @options[:time_inactive] < @minimum_time_inactive
+  puts "Minimum value for time inactive is #{@minimum_time_inactive} hours"
+  usage
+  exit
+end
+
+# getting EPOC time
+@now = Time.now.to_i
+@user = 'U'
+
+@environment_url = "http://api.copperegg.com"
+@environment_url = "http://api.cuegglocal.com"
+@all_servers_url = "#{@environment_url}/v2/revealcloud/systems.json?show_hidden=1"
+
+@get_class = Net::HTTP::Get
+@post_class = Net::HTTP::Post
+@delete_class = Net::HTTP::Delete
+
+def hit_request (url, request_class)
+  parsed_url = URI.parse(url)
+  request = request_class.new parsed_url.to_s
+  request.basic_auth @options[:apikey], @user
+  response = Net::HTTP.start(parsed_url.host, parsed_url.port){|http| http.request(request)}
+  response
+end
+
+def hide_server (uuid)
+  url = "#{@environment_url}/v2/revealcloud/uuids/#{uuid}/hide.json"
+  hit_request url, @post_class
+end
+
+def remove_server (uuid)
+  url = "#{@environment_url}/v2/revealcloud/uuids/#{uuid}.json"
+  hit_request url, @delete_class
+end
+
+
+def get_seconds_from_hours (time_in_hours)
+  time_in_hours * 60 * 60
+end
+
+def process_servers
+  response = hit_request @all_servers_url, @get_class
+  systems_json = JSON.parse response.body
+  fine_servers_count = 0
+  processed_server_count = 0
+  systems_json.each do |system|
+    last_updated_at = system['a']['p']
+    uuid = system['uuid']
+    server_name = system['a']['n']
+    if @now - last_updated_at > get_seconds_from_hours(@options[:time_inactive])
+      if @options[:dryrun]
+        puts "Server '#{server_name}' with uuid=#{uuid} is too old! Not updated since #{Time.at last_updated_at}."
+      else
+        case @options[:action]
+          when @remove
+            puts "Removing Server '#{server_name}' with uuid=#{uuid}. It was not updated since #{Time.at last_updated_at}." if @options[:logging]
+            remove_server uuid
+          when @hide
+            puts "Hiding Server '#{server_name}' with uuid=#{uuid}. It was not updated since #{Time.at last_updated_at}." if @options[:logging]
+            if system["hid"] == 0
+              hide_server uuid
+            else
+              puts "Server '#{server_name}' with uuid=#{uuid} already hidden." if @options[:logging]
+            end
+        end
+      end
+      processed_server_count += 1
+    else
+      puts "Server '#{server_name}' with uuid=#{uuid} is fine, it was updated on #{Time.at last_updated_at}" if @options[:logging]
+      fine_servers_count += 1
+    end
+  end
+
+  if @options[:dryrun]
+    puts "#{processed_server_count} old servers present. Hide|Remove them by removing --dryrun (-d) option"
+  else
+    puts "Processed #{processed_server_count} servers with #{@options[:action]} action. Didn't touch #{fine_servers_count} servers"
+  end
+end
+
+def process_probes
+  puts "Currently removing inactive probes is not supported by the script"
+end
+
+def process_customs
+  puts "Currently removing inactive Custom Metrics is not supported by the script"
+end
+
+if @options[:apikey]
+  case @options[:object_type]
+    when @server
+      process_servers
+    when @probe
+      process_probes
+    when @custom
+      process_customs
+  end
+
+  puts "Exiting!!!"
+end
+
