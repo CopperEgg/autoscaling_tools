@@ -14,7 +14,7 @@ opts = GetoptLong.new(
     [ '--verbosity', '-v', GetoptLong::NO_ARGUMENT ],
     [ '--dryrun', '-d', GetoptLong::NO_ARGUMENT ],
     [ '--apikey', '-a', GetoptLong::REQUIRED_ARGUMENT ],
-    # [ '--object_type', '-o', GetoptLong::REQUIRED_ARGUMENT ],
+    [ '--object_type', '-o', GetoptLong::REQUIRED_ARGUMENT ],
     [ '--type',  '-t', GetoptLong::REQUIRED_ARGUMENT ],
     [ '--time_inactive',  '-s', GetoptLong::REQUIRED_ARGUMENT ]
 )
@@ -27,10 +27,10 @@ inactive_objects for site:
   --dryrun          -d      outputs the server status for each server. No action is performed by type flag when dry run is active
   --apikey,         -a arg  Site token. If not specified will remove all inactive sites
   --type            -t arg  hide|remove Object, Default=hide
+  --object_type     -o arg  Object Type - Server|Probe|Custom
   --time_inactive   -s arg  Age in Hour
   EOF
 
-#  --object_type     -o arg  Object Type - Server|Probe|Custom
 end
 
 @options = {:logging => false, :time_inactive => 24, :action => "hide"}
@@ -82,10 +82,6 @@ opts.each do |opt, arg|
       @options[:time_inactive] = arg.to_f
   end
 end
-
-
-# todo Remove this when we update script for probes and custom metrics
-@options[:object_type] = @server
 
 # Checking required parameters
 if not @options[:object_type]
