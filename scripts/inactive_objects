@@ -107,7 +107,6 @@ end
 @user = 'U'
 
 @environment_url = "http://api.copperegg.com"
-@environment_url = "http://api.cuegglocal.com"
 @all_servers_url = "#{@environment_url}/v2/revealcloud/systems.json?show_hidden=1"
 
 @get_class = Net::HTTP::Get
