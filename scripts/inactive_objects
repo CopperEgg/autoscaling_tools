@@ -2,7 +2,7 @@
 
 # inactive_objects
 #
-# Takes a CopperEgg API key. It lists all the servers for that account and
+# Takes a Uptime Cloud Monitor API key. It lists all the servers for that account and
 # deletes ones more than a certain duration old.
 
 require 'getoptlong'
